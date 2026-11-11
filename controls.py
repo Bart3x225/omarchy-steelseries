@@ -205,6 +205,7 @@ def _apply_mouse(device, values, physical, hid_factory=None):
     path = _mouse_path(physical)
     if hid_factory is None:
         import hid
+        path=runtime.compatible_hid_path(physical,int(pid,16),path,hid_module=hid)
         hid_factory = hid.device
     raw = hid_factory()
     checked = _CheckedHID(raw, wireless)

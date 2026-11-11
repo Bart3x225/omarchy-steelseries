@@ -52,5 +52,28 @@ def headsetcontrol(*, for_apply=False):
     return Path(found) if found else None
 
 
+def compatible_hid_path(physical, product_id, hidraw_path, *, hid_module=None):
+    """Resolve this exact interface in either Linux hidraw or libusb HIDAPI.
+
+    PyPI wheels can use libusb paths such as 7-1.3:1.3, while the system
+    binding uses /dev/hidrawN. Never substitute the first matching VID/PID.
+    """
+    if hid_module is None:
+        import hid as hid_module
+    physical=Path(physical).resolve()
+    allowed={hidraw_path if isinstance(hidraw_path,bytes) else os.fsencode(hidraw_path)}
+    for interface in physical.iterdir():
+        try:
+            if interface.is_dir() and interface.parent.resolve()==physical and (interface/'bInterfaceNumber').read_text().strip()=='03':
+                allowed.add(os.fsencode(interface.name))
+        except OSError:
+            continue
+    matches=[entry['path'] for entry in hid_module.enumerate(0x1038,product_id)
+             if entry.get('interface_number')==3 and entry.get('path') in allowed]
+    if len(matches)!=1:
+        raise OSError('No unique HIDAPI path for the exact physical Aerox interface')
+    return matches[0]
+
+
 def mouse_python():
     return data_dir() / 'venv/bin/python'

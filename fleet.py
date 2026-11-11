@@ -381,7 +381,8 @@ def read_aerox(path, wireless=False, factory=None):
 if __name__ == '__main__':
     if len(sys.argv) == 4 and sys.argv[1] == '--aerox':
         try:
-            result = read_aerox(mouse_hid_path(sys.argv[2]), AEROX[sys.argv[3]][1])
+            path=runtime.compatible_hid_path(sys.argv[2],int(sys.argv[3],16),mouse_hid_path(sys.argv[2]))
+            result = read_aerox(path, AEROX[sys.argv[3]][1])
         except Exception as exc:
             result = failure(f'{type(exc).__name__}: {exc}')
     elif sys.argv[1:] == ['--bluetooth']:
