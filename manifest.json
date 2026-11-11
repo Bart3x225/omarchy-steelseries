@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "bart.steelseries",
+  "name": "SteelSeries Devices",
+  "version": "0.1.0-beta.1",
+  "author": "Bart",
+  "description": "SteelSeries peripheral battery monitoring, local history and opt-in experimental hardware controls",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "SteelSeries Devices",
+    "description": "One icon per detected device; supported headset and mouse battery reads",
+    "category": "System",
+    "allowMultiple": false
+  }
+}

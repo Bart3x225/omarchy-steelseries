@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      qml_check:
+        description: 'Run optional Qt 6 parser and advisory lint (shell imports not installed)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  offline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.13']
+    env:
+      PYTHONNOUSERSITE: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      STEELSERIES_HARDWARE_TESTS: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Isolated Python dependencies (wheel-backed HID; no system bus required)
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install 'rivalcfg==4.17.0' 'hidapi==0.15.0'
+          .venv/bin/python -m pip check
+      - name: Python offline regression tests
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: |
+          .venv/bin/python -m unittest discover -s . -p 'test_*.py' -v
+          .venv/bin/python -c "import rivalcfg, hid; from importlib.metadata import version; assert version('rivalcfg') == '4.17.0'; assert version('hidapi') == '0.15.0'"
+          .venv/bin/python -m unittest -v test_controls.ControlsTests.test_mouse_real_rivalcfg_encodes_only_allowed_packets
+      - name: Node UI model regression tests
+        run: |
+          node test_model.cjs
+          node test_notifications.cjs
+      - name: Compile Python source without adding build artifacts to the tree
+        env:
+          PYTHONPYCACHEPREFIX: ${{ runner.temp }}/steelseries-pycache
+        run: .venv/bin/python -m compileall -q -x '(^|/)(\.git|\.venv|venv|__pycache__)(/|$)' .
+      - name: Publication metadata and source audit
+        run: .venv/bin/python scripts/check-release.py .
+
+  qml-optional:
+    if: github.event_name == 'workflow_dispatch' && inputs.qml_check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install real Qt 6 tools (no shell type mocks)
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y qt6-declarative-dev-tools qml6-module-qtquick qml6-module-qtqml qml6-module-qtquick-layouts
+      - name: QML syntax through the Qt 6 parser (no files rewritten)
+        run: |
+          for file in *.qml; do
+            /usr/lib/qt6/bin/qmlformat "$file" > /dev/null
+          done
+      - name: Advisory real qmllint (Omarchy/Quickshell imports require the target desktop)
+        continue-on-error: true
+        run: /usr/lib/qt6/bin/qmllint -I . *.qml

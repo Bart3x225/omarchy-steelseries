@@ -1,0 +1,3 @@
+# Audited mouse backend and its sole runtime dependency. No RGB APIs are used.
+rivalcfg==4.17.0
+hidapi==0.15.0

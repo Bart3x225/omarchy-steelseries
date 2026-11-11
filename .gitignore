@@ -1,0 +1,44 @@
+# Python / local dependency installations
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# No bundled executables, build artifacts, or downloaded packages
+/bin/
+build/
+dist/
+*.egg-info/
+node_modules/
+
+# Private machine state must never be committed
+.env
+.env.*
+*.key
+*.pem
+settings.json
+history.sqlite3*
+*.db
+*.sqlite
+*.sqlite3
+*.log
+logs/
+telemetry/
+screenshots/
+profiles/
+.hermes/
+*.png
+*.jpg
+*.jpeg
+*.webp
+
+# Editor / OS state
+.idea/
+.vscode/
+.DS_Store
+*~
