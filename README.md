@@ -2,7 +2,7 @@
 
 A community Omarchy/Quickshell bar plugin for SteelSeries peripheral battery status, connection notifications, local history and opt-in experimental hardware controls.
 
-Plugin ID: `bart.steelseries` · Release: `0.1.0-beta.1` · Own code: MIT
+Plugin ID: `bart.steelseries` · Release: `0.1.0-beta.2` · Own code: MIT
 
 Not affiliated with SteelSeries. This is a beta, not a claim of universal SteelSeries support. Read [compatibility and verification limits](docs/COMPATIBILITY.md) before enabling hardware controls.
 
@@ -46,6 +46,17 @@ omarchy plugin enable bart.steelseries --section right
 `--headsetcontrol` downloads and builds upstream source; `--mouse-controls` downloads Python packages into an isolated user environment. These commands do not apply DPI, EQ, lighting or other hardware settings. Review [dependency/license details](docs/DEPENDENCIES.md) and [third-party notices](THIRD_PARTY_NOTICES.md).
 
 If HID access is denied, use the narrowly scoped udev-rule instructions in the dependency guide. Do not run the bar or its polling backend as root. Never replace access rules with world-writable access to all HID devices.
+
+## Security upgrade from beta.1
+
+After updating the plugin to beta.2, explicitly rebuild the headset dependency:
+
+```sh
+python3 -B setup.py --headsetcontrol
+python3 -B setup.py --check
+```
+
+Beta.1 pinned a HeadsetControl revision with unsafe explicit-size HID writes in the Nova 5/5X setting path. Beta.2 applies a verified zero-padding patch before building. Older builds and arbitrary PATH executables are no longer used, including for polling; headset telemetry/controls remain unavailable until this explicit rebuild. Mouse monitoring, preferences and history are unaffected. No settings are automatically applied. See [dependency patch and regression proof](docs/DEPENDENCIES.md#security-patch-and-regression-proof).
 
 ## Usage
 
@@ -111,4 +122,4 @@ Qt6 linting needs the Omarchy `qs.*` imports; live popup/log checks are still re
 
 ## License
 
-Own source: [MIT](LICENSE). Dependencies retain their own licenses, notably HeadsetControl GPLv3 and rivalcfg WTFPL. No compiled HeadsetControl binary is distributed by this repository or release. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Own source: [MIT](LICENSE), except the HeadsetControl dependency patch under [GPLv3](patches/LICENSE). Dependencies retain their own licenses, notably HeadsetControl GPLv3 and rivalcfg WTFPL. No compiled HeadsetControl binary is distributed by this repository or release. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

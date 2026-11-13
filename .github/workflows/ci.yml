@@ -56,6 +56,23 @@ jobs:
       - name: Publication metadata and source audit
         run: .venv/bin/python scripts/check-release.py .
 
+  dependency-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Fetch checksum-pinned upstream source (no backend execution)
+        run: python -c "import os, urllib.request, runtime; urllib.request.urlretrieve(runtime.HEADSET_URL, os.path.join(os.environ['RUNNER_TEMP'], 'headsetcontrol-source.tar.gz'))"
+      - name: Prove original fails and patched production HID passes ASan/UBSan
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: python scripts/check-headsetcontrol-memory.py --archive "$RUNNER_TEMP/headsetcontrol-source.tar.gz" --prove-regression
+
   qml-optional:
     if: github.event_name == 'workflow_dispatch' && inputs.qml_check
     runs-on: ubuntu-24.04

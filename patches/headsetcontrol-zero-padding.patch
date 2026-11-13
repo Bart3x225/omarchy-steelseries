@@ -1,0 +1,30 @@
+--- a/lib/devices/hid_interface.hpp
++++ b/lib/devices/hid_interface.hpp
+@@ -97,6 +97,13 @@
+     [[nodiscard]] auto write(hid_device* device_handle, std::span<const uint8_t> data, size_t size)
+         -> Result<void> override
+     {
++        // The explicit report size may exceed the command span. Never read
++        // past that span: initialize the complete outgoing report first.
++        if (size > data.size()) {
++            std::vector<uint8_t> padded(data.begin(), data.end());
++            padded.resize(size, 0);
++            return write(device_handle, padded);
++        }
+         const auto bytes_written = hid_write(device_handle, data.data(), size);
+         if (bytes_written < 0) [[unlikely]] {
+             return DeviceError::hidError(
+@@ -137,6 +144,13 @@
+     [[nodiscard]] auto sendFeatureReport(hid_device* device_handle, std::span<const uint8_t> data, size_t size)
+         -> Result<void> override
+     {
++        // The explicit report size may exceed the command span. Never read
++        // past that span: initialize the complete outgoing report first.
++        if (size > data.size()) {
++            std::vector<uint8_t> padded(data.begin(), data.end());
++            padded.resize(size, 0);
++            return sendFeatureReport(device_handle, padded);
++        }
+         const auto result = hid_send_feature_report(device_handle, data.data(), size);
+         if (result < 0) [[unlikely]] {
+             return DeviceError::hidError(

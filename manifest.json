@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "bart.steelseries",
   "name": "SteelSeries Devices",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "author": "Bart",
   "description": "SteelSeries peripheral battery monitoring, local history and opt-in experimental hardware controls",
   "kinds": [

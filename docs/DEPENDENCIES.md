@@ -1,8 +1,8 @@
 # Dependencies and explicit setup
 
 The plugin's own code is MIT licensed. No compiled HeadsetControl binary,
-HeadsetControl source tree, Python virtual environment, or third-party license
-text is bundled in the plugin. External tools retain their own licenses.
+HeadsetControl source tree or Python virtual environment is bundled in the plugin.
+The small dependency patch and its GPLv3 license are included under `patches/`. External tools retain their own licenses.
 Installing the plugin alone does not download, compile, install, or configure
 anything. Importing its modules does not perform setup or query hardware.
 
@@ -19,7 +19,7 @@ properties. Missing Bluetooth support is reported independently of USB results.
 Neither Bluetooth discovery/pairing nor settings restoration is performed.
 
 Building the pinned HeadsetControl requires CMake, a C++20 toolchain (GCC 13+
-or Clang 16+), make/build tools, pkg-config, and the hidapi library and headers.
+or Clang 16+), make/build tools, `patch`, pkg-config, and the hidapi library and headers.
 The built CLI continues to need the system hidapi shared library. The mouse
 venv requires Python venv/ensurepip support and network access to PyPI. If a
 hidapi wheel is unavailable for your Python/architecture, pip may need the
@@ -61,8 +61,7 @@ package versions, system imports and build-tool availability. Exit status 0
 means both pinned controls backends and telemetry imports are ready; 1 means
 something is missing or mismatched. Missing build tools alone do not invalidate
 an already built backend. It does not test device permissions, service health,
-wireless connectivity, settings readback, or whether a PATH backend supports a
-specific model. `--check` cannot be combined with installation/staging flags.
+wireless connectivity or settings readback. `--check` cannot be combined with installation/staging flags.
 
 All application dependencies live under
 `${XDG_DATA_HOME:-$HOME/.local/share}/omarchy-steelseries`. XDG_DATA_HOME must
@@ -85,20 +84,20 @@ and never runs `cmake --install`, the CLI's default action, its integration
 tests, or any hardware command. Build work is outside the plugin, in a
 temporary directory within the XDG dependency tree.
 
-The installation at `headsetcontrol/<commit>/` contains:
+The installation at `headsetcontrol/<commit>-zero-padding-v1/` contains:
 
 - `bin/headsetcontrol`: the locally built executable;
 - `source.tar.gz`: the complete verified upstream source archive;
+- `headsetcontrol-zero-padding.patch`: the exact applied GPLv3 dependency patch;
 - `LICENSE`: the upstream archive's `license` (GNU GPL version 3);
 - `NOTICE`: upstream attribution, source commit and license separation;
-- `receipt.json`: source URL/commit/archive SHA256 and **this build's** binary
+- `receipt.json`: source URL/commit/archive SHA256, patch SHA256 and **this build's** binary
   SHA256. The receipt is written last; incomplete installs cannot enable Apply.
 
-Read-only headset polling uses this local executable if present, otherwise
-`headsetcontrol` on PATH. A PATH backend can provide telemetry, but **cannot
-enable headset Apply**. Apply validates the pinned source commit, pinned
-source archive digest and the installed executable's current checksum against
-its build receipt; it never relies on a machine-specific baked-in binary hash.
+Both polling and Apply require the patched local executable and validate its
+pinned source commit, archive digest, patch digest and current binary checksum
+against the build receipt. Unverified PATH backends and old cached builds are
+not used. No machine-specific binary hash is baked into the plugin.
 Capabilities only inspect local files/receipts: no subprocesses or hardware
 queries. A failed/missing receipt hides headset controls until explicit setup.
 The worker revalidates immediately before launching a setting command.
@@ -110,6 +109,35 @@ Retain the archive/license/notices when moving a locally built backend. The
 plugin's MIT license does not relicense this GPL dependency; distributing
 HeadsetControl binaries carries separate GPL obligations, including applicable
 corresponding-source requirements. This repository does not distribute them.
+
+### Security patch and regression proof
+
+Beta.1 used short Nova 5/5X commands with an explicit 64-byte write size.
+The pinned production HID overload forwarded that size without padding,
+reading beyond the command buffer. Beta.2 fixes the production explicit-size
+write and feature-report overloads to copy the payload into zero-initialized
+storage whenever the requested report is larger than the input span.
+
+Setup applies `patches/headsetcontrol-zero-padding.patch` with zero fuzz after
+verifying the source archive and original header. It verifies both the patch
+and resulting header hashes and aborts before compilation on any mismatch.
+Patch SHA256: `f4f3064a677fbaa205bf62e28440a3f999e3b77fa43d5928b3d1d3227c4b7151`.
+The separate build directory and mandatory patch-aware receipt invalidate old
+installs. Update the plugin, then explicitly rerun `python3 -B setup.py --headsetcontrol`;
+no background rebuild, download or hardware-setting change occurs.
+
+For an offline regression, supply the retained verified upstream archive:
+
+```sh
+python3 -B scripts/check-headsetcontrol-memory.py --archive /absolute/path/to/source.tar.gz --prove-regression
+```
+
+This compiles the actual upstream `RealHIDInterface` and result implementation
+with C++23, AddressSanitizer and UndefinedBehaviorSanitizer. Only the HIDAPI
+boundary is stubbed, so no devices can be opened. It requires the original
+zero-padding assertion to fail, then runs short/exact/truncated/empty writes,
+feature reports and failure propagation against the patched implementation.
+The CI security job downloads only the pinned archive and runs the same proof.
 
 ### Mouse controls: isolated Python environment
 

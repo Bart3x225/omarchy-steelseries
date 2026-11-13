@@ -23,14 +23,16 @@ class RuntimeTests(unittest.TestCase):
             binary.parent.mkdir(parents=True)
             binary.write_bytes(b'unit-test executable')
             binary.chmod(0o700)
-            self.assertEqual(runtime.headsetcontrol(), binary)
+            self.assertIsNone(runtime.headsetcontrol())
             with self.assertRaises(ValueError):
                 runtime.headsetcontrol(for_apply=True)
             receipt = dict(source_commit=runtime.HEADSET_COMMIT,
                            source_archive_sha256=runtime.HEADSET_ARCHIVE_SHA256,
+                           patch_sha256=runtime.HEADSET_PATCH_SHA256,
                            binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest())
             (runtime.headset_dir() / 'receipt.json').write_text(json.dumps(receipt))
             self.assertEqual(runtime.headsetcontrol(for_apply=True), binary)
+            self.assertEqual(runtime.headsetcontrol(), binary)
             binary.write_bytes(b'changed')
             with self.assertRaises(ValueError):
                 runtime.headsetcontrol(for_apply=True)
@@ -39,14 +41,14 @@ class RuntimeTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 runtime.headsetcontrol(for_apply=True)
 
-    def test_path_backend_is_polling_only(self):
+    def test_path_backend_is_never_trusted(self):
         import runtime
         with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {'XDG_DATA_HOME': tmp}):
             binary = Path(tmp) / 'headsetcontrol'
             binary.write_text('#!/bin/sh\nexit 0\n')
             binary.chmod(0o700)
             with patch.dict(os.environ, {'PATH': tmp}):
-                self.assertEqual(runtime.headsetcontrol(), binary)
+                self.assertIsNone(runtime.headsetcontrol())
                 with self.assertRaises(ValueError):
                     runtime.headsetcontrol(for_apply=True)
             binary.unlink()
@@ -64,11 +66,27 @@ class RuntimeTests(unittest.TestCase):
             (runtime.headset_dir() / 'receipt.json').write_text(json.dumps(dict(
                 source_commit=runtime.HEADSET_COMMIT,
                 source_archive_sha256=runtime.HEADSET_ARCHIVE_SHA256,
+                patch_sha256=runtime.HEADSET_PATCH_SHA256,
                 binary_sha256=runtime.sha256_file(binary))))
             device = dict(id_vendor='0x1038', id_product='0x2232')
             self.assertEqual(len(controls.capabilities(device)), 3)
             binary.write_bytes(b'changed')
             self.assertEqual(controls.capabilities(device), [])
+
+    def test_unpatched_receipt_is_rejected_for_polling_and_apply(self):
+        import runtime
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {'XDG_DATA_HOME': tmp, 'PATH': ''}):
+            binary = runtime.headset_dir() / 'bin/headsetcontrol'
+            binary.parent.mkdir(parents=True)
+            binary.write_bytes(b'old backend')
+            binary.chmod(0o700)
+            receipt = dict(source_commit=runtime.HEADSET_COMMIT,
+                           source_archive_sha256=runtime.HEADSET_ARCHIVE_SHA256,
+                           binary_sha256=runtime.sha256_file(binary))
+            (runtime.headset_dir() / 'receipt.json').write_text(json.dumps(receipt))
+            self.assertIsNone(runtime.headsetcontrol())
+            with self.assertRaises(ValueError):
+                runtime.headsetcontrol(for_apply=True)
 
     def test_polling_adapters_use_runtime_backend(self):
         import fleet

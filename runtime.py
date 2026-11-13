@@ -2,12 +2,13 @@
 import os
 import hashlib
 import json
-import shutil
 from pathlib import Path
 
 HEADSET_COMMIT = '0c8a76fa019cd02263a1c69e00e18e229b16d87f'
 HEADSET_ARCHIVE_SHA256 = '4215cef92588422eb326390be11e1f5308e98b35a551e187f17c3eed1c199402'
 HEADSET_URL = f'https://codeload.github.com/Sapd/HeadsetControl/tar.gz/{HEADSET_COMMIT}'
+HEADSET_PATCH_SHA256 = 'f4f3064a677fbaa205bf62e28440a3f999e3b77fa43d5928b3d1d3227c4b7151'
+HEADSET_BUILD_REVISION = HEADSET_COMMIT + '-zero-padding-v1'
 
 
 def data_dir():
@@ -17,7 +18,7 @@ def data_dir():
 
 
 def headset_dir():
-    return data_dir() / 'headsetcontrol' / HEADSET_COMMIT
+    return data_dir() / 'headsetcontrol' / HEADSET_BUILD_REVISION
 
 
 def sha256_file(path):
@@ -29,27 +30,26 @@ def sha256_file(path):
 
 
 def headsetcontrol(*, for_apply=False):
-    """Polling permits PATH; Apply accepts only this user's pinned build receipt.
+    """Use only this user's checksum-receipted, patched build, including polling.
 
+    Older cached executables and unverified PATH tools are never fallback choices.
     This detects accidental replacement, not tampering by the owning user (who
-    controls both the executable and receipt). It is not a signature scheme.
+    controls both executable and receipt). It is not a signature scheme.
     """
     binary = headset_dir() / 'bin/headsetcontrol'
-    available = binary.is_file() and os.access(binary, os.X_OK)
-    if for_apply:
-        try:
-            receipt = json.loads((headset_dir() / 'receipt.json').read_text())
-            if (not available or receipt['source_commit'] != HEADSET_COMMIT
-                    or receipt['source_archive_sha256'] != HEADSET_ARCHIVE_SHA256
-                    or receipt['binary_sha256'] != sha256_file(binary)):
-                raise ValueError('Pinned HeadsetControl receipt/checksum mismatch')
-        except (OSError, KeyError, TypeError, ValueError) as exc:
-            raise ValueError('Run setup.py --headsetcontrol: pinned build receipt required for Apply') from exc
-        return binary
-    if available:
-        return binary
-    found = shutil.which('headsetcontrol')
-    return Path(found) if found else None
+    try:
+        receipt = json.loads((headset_dir() / 'receipt.json').read_text())
+        if (not binary.is_file() or not os.access(binary, os.X_OK)
+                or receipt['source_commit'] != HEADSET_COMMIT
+                or receipt['source_archive_sha256'] != HEADSET_ARCHIVE_SHA256
+                or receipt['patch_sha256'] != HEADSET_PATCH_SHA256
+                or receipt['binary_sha256'] != sha256_file(binary)):
+            raise ValueError('Patched HeadsetControl receipt/checksum mismatch')
+    except (OSError, KeyError, TypeError, ValueError) as exc:
+        if for_apply:
+            raise ValueError('Run setup.py --headsetcontrol: patched build receipt required for Apply') from exc
+        return None
+    return binary
 
 
 def compatible_hid_path(physical, product_id, hidraw_path, *, hid_module=None):

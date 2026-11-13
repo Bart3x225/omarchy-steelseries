@@ -8,6 +8,12 @@ https://github.com/Sapd/HeadsetControl
 
 The optional headset backend is a separate GPLv3 program. Its complete license is at https://github.com/Sapd/HeadsetControl/blob/master/license. The setup tool builds an immutable source revision locally and retains its source/license and provenance outside the plugin repository. This repository and its GitHub release do not redistribute a compiled HeadsetControl binary. Anyone redistributing their own compiled dependency must meet its applicable license obligations; the plugin's MIT license does not waive them.
 
+The included `patches/headsetcontrol-zero-padding.patch` modifies upstream
+GPLv3 source and is supplied under GPLv3, not the plugin MIT license. See
+`patches/LICENSE` for the full license. Setup retains the exact patch alongside
+the verified upstream archive so the modified source can be reconstructed.
+The patch is maintained here; this is not a claim that upstream merged it.
+
 ## rivalcfg
 
 https://github.com/flozz/rivalcfg

@@ -16,6 +16,21 @@ import urllib.request
 import runtime
 
 
+def patch_headsetcontrol(source):
+    """Apply one audited dependency patch, verifying input, patch and output bytes."""
+    patch_file = Path(__file__).resolve().parent / 'patches/headsetcontrol-zero-padding.patch'
+    header = Path(source) / 'lib/devices/hid_interface.hpp'
+    if runtime.sha256_file(patch_file) != runtime.HEADSET_PATCH_SHA256:
+        raise ValueError('HeadsetControl patch checksum mismatch')
+    if runtime.sha256_file(header) != 'd8dfa8bb618c6d7c22f511c31344cd78be32197a1d4728b29a32e3092f9db545':
+        raise ValueError('Unexpected HeadsetControl header; refusing patch/build')
+    subprocess.run(['patch', '--batch', '--forward', '--fuzz=0', '-p1', '-i', str(patch_file)],
+                   cwd=source, check=True, timeout=30)
+    if runtime.sha256_file(header) != '66e9ae0ee9a6a27da9a05bc35bcbbcaa7b6e9da7bcced38a6027ec0cec9cd81e':
+        raise ValueError('Patched HeadsetControl header checksum mismatch')
+    return patch_file
+
+
 def build_headsetcontrol():
     """Download verified immutable source; build only the CLI target, not tests.
 
@@ -40,6 +55,7 @@ def build_headsetcontrol():
         if len(sources) != 1 or not sources[0].is_dir():
             raise ValueError('Unexpected HeadsetControl archive layout')
         source = sources[0]
+        patch_file = patch_headsetcontrol(source)
         build = work / 'build'
         subprocess.run(['cmake', '-S', str(source), '-B', str(build),
                         '-DCMAKE_BUILD_TYPE=Release', '-DBUILD_UNIT_TESTS=OFF',
@@ -53,16 +69,21 @@ def build_headsetcontrol():
         binary = root / 'bin/headsetcontrol'
         shutil.copy2(build / 'headsetcontrol', binary)
         shutil.copy2(archive, root / 'source.tar.gz')
+        shutil.copy2(patch_file, root / patch_file.name)
         shutil.copy2(source / 'license', root / 'LICENSE')
         (root / 'NOTICE').write_text(
             'HeadsetControl is a separate external dependency by its upstream authors.\n'
             'Upstream: https://github.com/Sapd/HeadsetControl\n'
             f'Source commit: {runtime.HEADSET_COMMIT}\n'
             'License: GPL-3.0; see LICENSE and the retained complete source.tar.gz.\n'
-            'The plugin MIT license does not relicense HeadsetControl.\n')
+            'Locally modified: explicit-size HID writes/feature reports zero-pad short commands.\n'
+            'Reconstruct source: extract source.tar.gz, then patch -p1 < headsetcontrol-zero-padding.patch\n'
+            f'Patch SHA256: {runtime.HEADSET_PATCH_SHA256}\n'
+            'The plugin MIT license does not relicense HeadsetControl or this dependency patch.\n')
         receipt = dict(source_commit=runtime.HEADSET_COMMIT,
                        source_url=runtime.HEADSET_URL,
                        source_archive_sha256=runtime.HEADSET_ARCHIVE_SHA256,
+                       patch_sha256=runtime.HEADSET_PATCH_SHA256,
                        binary_sha256=runtime.sha256_file(binary))
         pending = root / 'receipt.json.new'
         pending.write_text(json.dumps(receipt, indent=2) + '\n')
@@ -120,7 +141,7 @@ def check():
                   system_python=sys.executable,
                   system_hid=importlib.util.find_spec('hid') is not None,
                   system_dbus=importlib.util.find_spec('dbus') is not None,
-                  build_tools={name: shutil.which(name) for name in ('cmake', 'c++', 'pkg-config')})
+                  build_tools={name: shutil.which(name) for name in ('cmake', 'c++', 'patch', 'pkg-config')})
     print(json.dumps(report, indent=2))
     return 0 if (pinned == str(runtime.headset_dir() / 'bin/headsetcontrol')
                  and versions == {'rivalcfg': '4.17.0', 'hidapi': '0.15.0'}

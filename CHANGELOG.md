@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-beta.2
+
+- Fix the pinned external HeadsetControl production HID overloads: short explicit-size writes and feature reports are zero-padded rather than reading beyond the command span. Preserve sidetone, EQ and auto-off controls.
+- Verify the upstream archive, patch, original header and patched header before building. Retain the patch alongside corresponding source, license and receipt.
+- Use a separate patched build directory and require its patch-aware checksum receipt for both telemetry and Apply; reject legacy builds and unverified PATH executables. Existing installations must explicitly rerun `python3 -B setup.py --headsetcontrol`.
+- Add a no-hardware ASan/UBSan test compiled against real upstream production code: prove the original fails, then verify zero padding, exact/truncated/empty payloads, feature reports and backend errors after patching. Run this regression in CI.
+- No physical device-setting writes were used to validate this fix; experimental controls remain opt-in and their hardware readback limitations are unchanged.
+
 ## 0.1.0-beta.1
 
 - First public beta under `bart.steelseries` / SteelSeries Devices.

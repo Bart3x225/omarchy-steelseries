@@ -47,14 +47,43 @@ class SetupTests(unittest.TestCase):
             with patch('setup.urllib.request.urlopen', side_effect=lambda *a, **kw: binary_io.BytesIO(payload)), patch('setup.subprocess.run', side_effect=run):
                 with self.assertRaises(ValueError):
                     setup.build_headsetcontrol()
-                with patch.object(runtime, 'HEADSET_ARCHIVE_SHA256', hashlib.sha256(payload).hexdigest()):
+                with patch.object(runtime, 'HEADSET_ARCHIVE_SHA256', hashlib.sha256(payload).hexdigest()), patch('setup.patch_headsetcontrol', return_value=Path(setup.__file__).parent / 'patches/headsetcontrol-zero-padding.patch') as apply_patch:
                     binary = setup.build_headsetcontrol()
+                    apply_patch.assert_called_once()
                     self.assertEqual(runtime.headsetcontrol(for_apply=True), binary)
                     self.assertTrue((runtime.headset_dir() / 'LICENSE').is_file())
                     self.assertTrue((runtime.headset_dir() / 'source.tar.gz').is_file())
+                    self.assertEqual(runtime.sha256_file(runtime.headset_dir() / 'headsetcontrol-zero-padding.patch'), runtime.HEADSET_PATCH_SHA256)
             self.assertEqual(len(commands), 2)
             self.assertIn('--target', commands[1])
             self.assertIn('headsetcontrol', commands[1])
+
+    def test_dependency_patch_rejects_unexpected_input_before_external_command(self):
+        with tempfile.TemporaryDirectory() as tmp, patch('setup.subprocess.run') as run:
+            source = Path(tmp)
+            header = source / 'lib/devices/hid_interface.hpp'
+            header.parent.mkdir(parents=True)
+            header.write_text('unexpected upstream content')
+            with self.assertRaisesRegex(ValueError, 'Unexpected HeadsetControl header'):
+                setup.patch_headsetcontrol(source)
+            run.assert_not_called()
+            with patch.object(runtime, 'HEADSET_PATCH_SHA256', '0' * 64):
+                with self.assertRaisesRegex(ValueError, 'patch checksum mismatch'):
+                    setup.patch_headsetcontrol(source)
+            run.assert_not_called()
+
+    def test_dependency_patch_verifies_output_after_patch_command(self):
+        expected = ['d8dfa8bb618c6d7c22f511c31344cd78be32197a1d4728b29a32e3092f9db545',
+                    '66e9ae0ee9a6a27da9a05bc35bcbbcaa7b6e9da7bcced38a6027ec0cec9cd81e']
+        for output in ('wrong output', expected[1]):
+            with patch('runtime.sha256_file', side_effect=[runtime.HEADSET_PATCH_SHA256, expected[0], output]), patch('setup.subprocess.run') as run:
+                if output == expected[1]:
+                    self.assertEqual(setup.patch_headsetcontrol(Path('/fixture')).name, 'headsetcontrol-zero-padding.patch')
+                else:
+                    with self.assertRaisesRegex(ValueError, 'header checksum mismatch'):
+                        setup.patch_headsetcontrol(Path('/fixture'))
+                self.assertIn('--fuzz=0', run.call_args.args[0])
+                self.assertEqual(run.call_args.kwargs['cwd'], Path('/fixture'))
 
     def test_udev_only_stages_scoped_file(self):
         with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {'XDG_DATA_HOME': tmp}):
