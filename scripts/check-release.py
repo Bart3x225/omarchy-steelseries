@@ -130,6 +130,25 @@ def audit(root):
         if path.is_symlink():
             errors.append(f'{rel}: symlinks are not allowed in release sources')
             continue
+        # Only the root marketplace PNG bypasses the source-only gate.
+        # This checks its header/limits, not screenshot privacy or full PNG validity.
+        if rel == 'preview.png':
+            try:
+                if path.stat().st_size > 50_000_000:
+                    errors.append(f'{rel}: preview exceeds 50 MB')
+                    continue
+                with path.open('rb') as preview:
+                    header = preview.read(24)
+                if (len(header) != 24 or header[:16] != b'\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR'):
+                    errors.append(f'{rel}: expected a PNG signature and IHDR')
+                    continue
+                width = int.from_bytes(header[16:20], 'big')
+                height = int.from_bytes(header[20:24], 'big')
+                if not width or not height or width * height > 40_000_000:
+                    errors.append(f'{rel}: invalid dimensions or preview exceeds 40 megapixels')
+            except OSError as exc:
+                errors.append(f'{rel}: unreadable preview ({type(exc).__name__})')
+            continue
         if (path.name in PRIVATE_NAMES or path.name == '.env' or path.name.startswith('.env.')
                 or path.suffix.lower() in BINARY_SUFFIXES | PRIVATE_SUFFIXES):
             errors.append(f'{rel}: private data, secret, image or compiled/archive artifact')
